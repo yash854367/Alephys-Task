@@ -1,0 +1,213 @@
+package expense;
+
+import java.io.*;
+import java.time.LocalDate;
+import java.time.YearMonth;
+import java.time.format.DateTimeFormatter;
+import java.util.*;
+
+public class ExpenseTracker {
+    private static final Scanner scanner = new Scanner(System.in);
+    private static final List<Transaction> transactions = new ArrayList<>();
+    private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
+    public static void main(String[] args) {
+        System.out.println("Welcome to Expense Tracker!");
+        while (true) {
+            System.out.println("\nMenu:");
+            System.out.println("1. Add Transaction");
+            System.out.println("2. View Monthly Summary");
+            System.out.println("3. Save Data to File");
+            System.out.println("4. Load Data from File");
+            System.out.println("5. Exit");
+            System.out.print("Enter option: ");
+            int option = getInt();
+
+            switch (option) {
+                case 1:
+                    addTransaction();
+                    break;
+                case 2:
+                    viewMonthlySummary();
+                    break;
+                case 3:
+                    saveToFile();
+                    break;
+                case 4:
+                    loadFromFile();
+                    break;
+                case 5:
+                    System.out.println("Thank you for using Expense Tracker!");
+                    return;
+                default:
+                    System.out.println("Invalid option. Please try again.");
+            }
+        }
+    }
+
+    private static void addTransaction() {
+        System.out.print("Is this Income or Expense? (Enter I for Income, E for Expense): ");
+        String type = scanner.next().trim().toUpperCase();
+        scanner.nextLine(); // consume newline
+
+        String category = "";
+        if (type.equals("I")) {
+            System.out.print("Enter Income Category (Salary/Business/Other): ");
+            category = scanner.nextLine().trim();
+        } else if (type.equals("E")) {
+            System.out.print("Enter Expense Category (Food/Rent/Travel/Other): ");
+            category = scanner.nextLine().trim();
+        } else {
+            System.out.println("Invalid type. Returning to menu.");
+            return;
+        }
+
+        System.out.print("Enter amount: ");
+        double amount = getDouble();
+        System.out.print("Enter date (YYYY-MM-DD), or leave blank for today: ");
+        String dateInput = scanner.nextLine().trim();
+        LocalDate date = dateInput.isEmpty() ? LocalDate.now() : LocalDate.parse(dateInput, DATE_FORMAT);
+
+        System.out.print("Enter optional description: ");
+        String description = scanner.nextLine().trim();
+
+        transactions.add(new Transaction(type, category, amount, date, description));
+        System.out.println("Transaction added successfully!");
+    }
+
+    private static void viewMonthlySummary() {
+        System.out.print("Enter year and month (YYYY-MM) for summary: ");
+        String ym = scanner.next().trim();
+        scanner.nextLine(); // consume newline
+        YearMonth yearMonth;
+        try {
+            yearMonth = YearMonth.parse(ym);
+        } catch (Exception e) {
+            System.out.println("Invalid format.");
+            return;
+        }
+
+        double incomeTotal = 0, expenseTotal = 0;
+        Map<String, Double> incomeCat = new HashMap<>();
+        Map<String, Double> expenseCat = new HashMap<>();
+
+        for (Transaction t : transactions) {
+            if (YearMonth.from(t.date).equals(yearMonth)) {
+                if (t.type.equals("I")) {
+                    incomeTotal += t.amount;
+                    incomeCat.put(t.category, incomeCat.getOrDefault(t.category, 0.0) + t.amount);
+                } else {
+                    expenseTotal += t.amount;
+                    expenseCat.put(t.category, expenseCat.getOrDefault(t.category, 0.0) + t.amount);
+                }
+            }
+        }
+
+        System.out.println("\nSummary for " + yearMonth);
+        System.out.println("Total Income: " + incomeTotal);
+        for (String cat : incomeCat.keySet()) {
+            System.out.println("  " + cat + ": " + incomeCat.get(cat));
+        }
+        System.out.println("Total Expenses: " + expenseTotal);
+        for (String cat : expenseCat.keySet()) {
+            System.out.println("  " + cat + ": " + expenseCat.get(cat));
+        }
+        System.out.println("Net Savings: " + (incomeTotal - expenseTotal));
+    }
+
+    private static void saveToFile() {
+        System.out.print("Enter filename to save data: ");
+        String filename = scanner.nextLine().trim();
+        try (PrintWriter pw = new PrintWriter(new FileWriter(filename))) {
+            for (Transaction t : transactions) {
+                pw.println(t.toFileString());
+            }
+            System.out.println("Data saved successfully to " + filename);
+        } catch (IOException e) {
+            System.out.println("Error saving file: " + e.getMessage());
+        }
+    }
+
+    private static void loadFromFile() {
+        System.out.print("Enter filename to load data from: ");
+        String filename = scanner.nextLine().trim();
+        File file = new File(filename);
+        if (!file.exists()) {
+            System.out.println("File does not exist!");
+            return;
+        }
+        try (BufferedReader br = new BufferedReader(new FileReader(file))) {
+            String line;
+            int loaded = 0;
+            while ((line = br.readLine()) != null) {
+                Transaction t = Transaction.fromFileString(line);
+                if (t != null) {
+                    transactions.add(t);
+                    loaded++;
+                }
+            }
+            System.out.println("Loaded " + loaded + " transactions from file.");
+        } catch (IOException e) {
+            System.out.println("Error loading file: " + e.getMessage());
+        }
+    }
+
+    // Helper methods
+    private static int getInt() {
+        while (true) {
+            try {
+                int value = Integer.parseInt(scanner.nextLine().trim());
+                return value;
+            } catch (Exception e) {
+                System.out.print("Please enter a valid number: ");
+            }
+        }
+    }
+
+    private static double getDouble() {
+        while (true) {
+            try {
+                double value = Double.parseDouble(scanner.nextLine().trim());
+                return value;
+            } catch (Exception e) {
+                System.out.print("Please enter a valid amount: ");
+            }
+        }
+    }
+
+    // Transaction class
+    static class Transaction {
+        String type; // I for Income, E for Expense
+        String category;
+        double amount;
+        LocalDate date;
+        String description;
+
+        Transaction(String type, String category, double amount, LocalDate date, String description) {
+            this.type = type;
+            this.category = category;
+            this.amount = amount;
+            this.date = date;
+            this.description = description;
+        }
+
+        String toFileString() {
+            return type + "," + category + "," + amount + "," + date.format(DATE_FORMAT) + "," + description.replace(",", ";");
+        }
+
+        static Transaction fromFileString(String line) {
+            try {
+                String[] parts = line.split(",", 5);
+                String type = parts[0];
+                String category = parts[1];
+                double amount = Double.parseDouble(parts[2]);
+                LocalDate date = LocalDate.parse(parts[3], DATE_FORMAT);
+                String description = parts.length > 4 ? parts[4] : "";
+                return new Transaction(type, category, amount, date, description);
+            } catch (Exception e) {
+                System.out.println("Error parsing line: " + line);
+                return null;
+            }
+        }
+    }
+}
